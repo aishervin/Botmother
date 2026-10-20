@@ -1,0 +1,25 @@
+name = "botmother"
+main = "src/index.js"
+compatibility_date = "2024-04-03"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Workers AI Binding (Llama 3.1)
+[ai]
+binding = "AI"
+
+# Cloudflare KV Namespace for Sessions, States & Encrypted Keys
+[[kv_namespaces]]
+binding = "KV"
+id = "a4d2af9f07a84b19bb0464018865ed63"
+
+# Allow importing .html files as text
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+# ─── Environment Variables & Secrets ───
+# Set via: wrangler secret put <NAME>
+# - BOT_TOKEN: Telegram Bot Token from @BotFather
+# - MASTER_SECRET: 32-byte hex for AES-GCM token encryption
+# - WORKER_DOMAIN: Domain of the worker (e.g. botmother.shen-zero.workers.dev)

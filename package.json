@@ -1,0 +1,26 @@
+{
+  "name": "botmother",
+  "version": "2.0.0",
+  "description": "®️SHΞN robotic™ — Serverless Telegram Bot Architect & Mother Engine on Cloudflare Workers",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "telegram",
+    "telegram-bot",
+    "cloudflare-workers",
+    "serverless",
+    "bot-builder",
+    "llama3",
+    "workers-ai"
+  ],
+  "author": "SHΞЯVIN™ (☬SHΞN™ Lab)",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.114.0"
+  }
+}

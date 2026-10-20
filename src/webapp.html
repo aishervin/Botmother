@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Botmother — اتصال به Cloudflare</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, sans-serif;
+      background: linear-gradient(135deg, #0a0a16 0%, #121226 50%, #0d172e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      color: #e0e0e0;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 24px;
+      padding: 32px 24px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    }
+    .logo-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+    .logo-cf {
+      width: 58px;
+      height: 58px;
+      background: #ffffff;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 20px rgba(243, 128, 32, 0.35);
+    }
+    .logo-cf svg { width: 36px; height: 36px; fill: #F38020; }
+    .logo-tg {
+      width: 58px;
+      height: 58px;
+      background: linear-gradient(135deg, #2AABEE, #229ED9);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 20px rgba(42, 171, 238, 0.35);
+    }
+    .logo-tg svg { width: 30px; height: 30px; fill: white; }
+    .connector {
+      width: 24px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 1px;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 6px;
+      color: #ffffff;
+    }
+    .subtitle {
+      font-size: 13px;
+      text-align: center;
+      color: #8c8c9e;
+      margin-bottom: 22px;
+      line-height: 1.6;
+    }
+    .connected-badge {
+      display: none;
+      text-align: center;
+      padding: 12px 16px;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      border-radius: 12px;
+      color: #4ade80;
+      font-size: 13px;
+      margin-bottom: 18px;
+      font-weight: 600;
+    }
+    .steps {
+      margin-bottom: 20px;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #b0b0c2;
+      line-height: 1.5;
+    }
+    .step:last-child { margin-bottom: 0; }
+    .step-num {
+      flex-shrink: 0;
+      width: 22px;
+      height: 22px;
+      background: rgba(243, 128, 32, 0.15);
+      border: 1px solid rgba(243, 128, 32, 0.35);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #F38020;
+    }
+    .step b { color: #ffffff; }
+    .form-group { margin-bottom: 20px; }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #cfcfe0;
+    }
+    .input-wrap { position: relative; }
+    input {
+      width: 100%;
+      padding: 15px 44px 15px 16px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 15px;
+      font-family: 'SF Mono', Monaco, monospace;
+      transition: all 0.2s;
+      direction: ltr;
+      text-align: left;
+    }
+    input:focus {
+      outline: none;
+      border-color: #F38020;
+      box-shadow: 0 0 0 3px rgba(243, 128, 32, 0.2);
+    }
+    input::placeholder { color: #555566; }
+    .toggle-btn {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #666677;
+      cursor: pointer;
+      padding: 6px;
+    }
+    .toggle-btn svg { width: 20px; height: 20px; }
+    .helper {
+      font-size: 12px;
+      color: #777788;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .helper b { color: #aaaabb; }
+
+    /* Button Actions Area - Both at Bottom, one above the other */
+    .actions-area {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    /* 1. Upper Button: White button with official Cloudflare logo */
+    .btn-get-token {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: #ffffff;
+      color: #0f172a;
+      padding: 15px 16px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: 0 4px 16px rgba(255, 255, 255, 0.15);
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .btn-get-token:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(243, 128, 32, 0.35);
+    }
+    .btn-get-token svg {
+      width: 26px;
+      height: 26px;
+      fill: #F38020;
+      flex-shrink: 0;
+    }
+
+    /* 2. Lower Button: Connect Button (starts grey, turns bright green when filled) */
+    .btn-connect {
+      width: 100%;
+      padding: 16px;
+      background: #27273a;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      color: #777788;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: not-allowed;
+      transition: all 0.25s ease;
+    }
+    .btn-connect.active {
+      background: #16a34a;
+      border-color: #22c55e;
+      color: #ffffff;
+      cursor: pointer;
+      box-shadow: 0 6px 22px rgba(34, 197, 94, 0.45);
+    }
+    .btn-connect.active:hover {
+      background: #22c55e;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(34, 197, 94, 0.65);
+    }
+
+    .status {
+      text-align: center;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 14px;
+      margin-top: 16px;
+      display: none;
+    }
+    .status.success {
+      display: block;
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #4ade80;
+    }
+    .status.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+    .status.loading {
+      display: block;
+      background: rgba(243, 128, 32, 0.1);
+      border: 1px solid rgba(243, 128, 32, 0.25);
+      color: #F38020;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 11px;
+      color: #555566;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(243, 128, 32, 0.3);
+      border-top-color: #F38020;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-row">
+      <div class="logo-tg">
+        <svg viewBox="0 0 24 24"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
+      </div>
+      <div class="connector"></div>
+      <div class="logo-cf">
+        <!-- Official Cloudflare Logo Vector -->
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727"/>
+        </svg>
+      </div>
+    </div>
+
+    <h1>اتصال به Cloudflare</h1>
+    <p class="subtitle">برای ساختن و دیپلوی ربات روی Cloudflare Workers، حساب خود را متصل کنید</p>
+
+    <div class="connected-badge" id="connectedBadge">
+      ✅ حساب Cloudflare شما متصل است
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">۱</div>
+        <div>روی دکمه سفید <b>دریافت توکن از کلودفلر</b> بزنید تا پنل باز شود</div>
+      </div>
+      <div class="step">
+        <div class="step-num">۲</div>
+        <div>نام توکن را <b>®️SHΞN robotic</b> قرار داده و قالب <b>Edit Cloudflare Workers</b> را انتخاب کنید</div>
+      </div>
+      <div class="step">
+        <div class="step-num">۳</div>
+        <div>توکن نهایی را کپی کرده، در کادر زیر وارد کنید و دکمه سبز <b>اتصال به کلودفلر</b> را بزنید</div>
+      </div>
+    </div>
+
+    <form id="cfForm">
+      <div class="form-group">
+        <label>توکن API Cloudflare</label>
+        <div class="input-wrap">
+          <input type="password" id="cfToken" placeholder="v1.0-xxxxx..." autocomplete="off" />
+          <button type="button" class="toggle-btn" id="toggleBtn" aria-label="نمایش/مخفی">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+            </svg>
+          </button>
+        </div>
+        <p class="helper">
+          دسترسی لازم: <b>Workers Scripts: Edit</b> و <b>Account: Read</b>
+        </p>
+      </div>
+
+      <!-- Action Buttons: Both at the Bottom, one above the other -->
+      <div class="actions-area">
+        <!-- 1. Upper Button: White with Official Cloudflare Logo -->
+        <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" class="btn-get-token">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.3154-.2246-.3164-.6045-.499-1.0615-.5205l-8.6592-.1123a.1559.1559 0 0 1-.1333-.0713c-.0283-.042-.0351-.0986-.021-.1553.0278-.084.1123-.1484.2036-.1562l8.7359-.1123c1.0351-.0489 2.1601-.8868 2.5537-1.9136l.499-1.3013c.0215-.0561.0293-.1128.0147-.168-.5625-2.5463-2.835-4.4453-5.5499-4.4453-2.5039 0-4.6284 1.6177-5.3876 3.8614-.4927-.3658-1.1187-.5625-1.794-.499-1.2026.119-2.1665 1.083-2.2861 2.2856-.0283.31-.0069.6128.0635.894C1.5683 13.171 0 14.7754 0 16.752c0 .1748.0142.3515.0352.5273.0141.083.0844.1475.1689.1475h15.9814c.0909 0 .1758-.0645.2032-.1553l.12-.4268zm2.7568-5.5634c-.0771 0-.1611 0-.2383.0112-.0566 0-.1054.0415-.127.0976l-.3378 1.1744c-.1475.5068-.0918.9707.1543 1.3164.2256.3164.6055.498 1.0625.5195l1.8437.1133c.0557 0 .1055.0263.1329.0703.0283.043.0351.1074.0214.1562-.0283.084-.1132.1485-.204.1553l-1.921.1123c-1.041.0488-2.1582.8867-2.5527 1.914l-.1406.3585c-.0283.0713.0215.1416.0986.1416h6.5977c.0771 0 .1474-.0489.169-.126.1122-.4082.1757-.837.1757-1.2803 0-2.6025-2.125-4.727-4.7344-4.727"/>
+          </svg>
+          <span>دریافت توکن از کلودفلر (Create Token)</span>
+        </a>
+
+        <!-- 2. Lower Button: Connect Button (Grey by default, turns Bright Green on paste/input) -->
+        <button type="submit" class="btn-connect" id="submitBtn" disabled>🔗 اتصال به کلودفلر</button>
+      </div>
+    </form>
+
+    <div class="status" id="status"></div>
+
+    <div class="footer">🔒 امنیت داده توسط Cloudflare Workers — Botmother</div>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+    tg.ready();
+
+    const form = document.getElementById("cfForm");
+    const tokenInput = document.getElementById("cfToken");
+    const submitBtn = document.getElementById("submitBtn");
+    const statusEl = document.getElementById("status");
+    const toggleBtn = document.getElementById("toggleBtn");
+    const connectedBadge = document.getElementById("connectedBadge");
+
+    toggleBtn.addEventListener("click", () => {
+      tokenInput.type = tokenInput.type === "password" ? "text" : "password";
+    });
+
+    // Dynamic button activation on token input or paste
+    function updateConnectButton() {
+      const val = tokenInput.value.trim();
+      if (val.length > 0) {
+        submitBtn.classList.add("active");
+        submitBtn.disabled = false;
+      } else {
+        submitBtn.classList.remove("active");
+        submitBtn.disabled = true;
+      }
+    }
+
+    tokenInput.addEventListener("input", updateConnectButton);
+    tokenInput.addEventListener("paste", () => {
+      setTimeout(updateConnectButton, 50);
+    });
+    tokenInput.addEventListener("change", updateConnectButton);
+
+    // Check if already connected
+    async function checkExisting() {
+      const userId = tg.initDataUnsafe?.user?.id || "";
+      try {
+        const res = await fetch("/api/check-cf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: tg.initData || "", userId }),
+        });
+        const data = await res.json();
+        if (data.ok && data.connected) {
+          connectedBadge.style.display = "block";
+        }
+      } catch (e) {}
+    }
+    checkExisting();
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const cfToken = tokenInput.value.trim();
+      if (!cfToken) {
+        showStatus("لطفاً توکن را وارد کنید", "error");
+        return;
+      }
+      const userId = tg.initDataUnsafe?.user?.id || "";
+      if (!tg.initData && !userId) {
+        showStatus("⚠️ لطفاً از داخل ربات تلگرام دکمه را باز کنید", "error");
+        return;
+      }
+      submitBtn.disabled = true;
+      showStatus("در حال بررسی و اتصال توکن...", "loading");
+      try {
+        const res = await fetch("/api/connect-cf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData: tg.initData || "", userId, cfToken }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showStatus("✅ حساب متصل شد! در حال بازگشت به ربات...", "success");
+          submitBtn.style.display = "none";
+          tokenInput.value = "";
+          setTimeout(() => tg.close(), 1800);
+        } else {
+          showStatus(data.error || "خطا در اتصال به Cloudflare", "error");
+          submitBtn.disabled = false;
+        }
+      } catch (err) {
+        showStatus("خطا در ارتباط با سرور: " + (err.message || ""), "error");
+        submitBtn.disabled = false;
+      }
+    });
+
+    function showStatus(msg, type) {
+      statusEl.className = "status " + type;
+      statusEl.innerHTML =
+        type === "loading" ? msg + '<span class="spinner"></span>' : msg;
+    }
+  </script>
+</body>
+</html>
