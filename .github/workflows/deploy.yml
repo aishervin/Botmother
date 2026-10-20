@@ -37,7 +37,7 @@ jobs:
         env:
           TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
           POOL_ENCRYPTION_KEY: ${{ secrets.POOL_ENCRYPTION_KEY }}
-        run: npx tgcloud push
+        run: npx tgcloud push --force
 
       - name: Sync Telegram webhook
         env:
