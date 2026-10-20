@@ -1,42 +1,32 @@
-name: Deploy Botmother to Cloudflare Workers
+name: Deploy Botmother to Telegram Serverless
 
 on:
-  push:
-    branches:
-      - main
-      - master
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    name: Deploy to Cloudflare Edge
+    name: Deploy Telegram Serverless project
     steps:
-      - name: Checkout Code
+      - name: Checkout project
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
-      - name: Check Secrets
-        id: check_secrets
-        run: |
-          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
-            echo "::warning ::CLOUDFLARE_API_TOKEN is not set in GitHub Secrets. Skipping automatic CI/CD deployment. You can deploy directly using 'npx wrangler deploy'."
-            echo "has_token=false" >> $GITHUB_OUTPUT
-          else
-            echo "has_token=true" >> $GITHUB_OUTPUT
-          fi
+      - name: Install CLI
+        run: npm install
 
-      - name: Deploy Worker via Wrangler
-        if: steps.check_secrets.outputs.has_token == 'true'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
+      - name: Configure pool encryption
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+          POOL_ENCRYPTION_KEY: ${{ secrets.POOL_ENCRYPTION_KEY }}
+        run: npm run configure:serverless
+
+      - name: Deploy modules and Mini App
+        env:
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+          POOL_ENCRYPTION_KEY: ${{ secrets.POOL_ENCRYPTION_KEY }}
+        run: npx tgcloud push

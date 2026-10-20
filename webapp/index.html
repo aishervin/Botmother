@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Botmother | استخر DeepSeek</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: #0d121c; color: #e8edf5; padding: 22px 16px calc(24px + env(safe-area-inset-bottom)); }
+    main { max-width: 480px; margin: 0 auto; }
+    .eyebrow { color: #76e0bb; font-size: 12px; letter-spacing: .08em; font-weight: 700; }
+    h1 { margin: 8px 0 10px; font-size: 27px; line-height: 1.25; }
+    p { color: #aab6c8; line-height: 1.75; font-size: 14px; }
+    .panel { background: #151e2b; border: 1px solid #263449; border-radius: 18px; padding: 18px; margin-top: 16px; }
+    label { display: block; font-size: 14px; font-weight: 650; margin: 14px 0 8px; }
+    input[type=password] { width: 100%; border: 1px solid #35445a; background: #0d141f; color: #fff; border-radius: 11px; padding: 14px; font-size: 15px; direction: ltr; text-align: left; }
+    input:focus { outline: 2px solid #76e0bb; border-color: transparent; }
+    .consent { display: flex; gap: 10px; align-items: flex-start; color: #bac5d4; font-size: 13px; line-height: 1.6; margin: 16px 0; }
+    .consent input { margin-top: 4px; accent-color: #76e0bb; }
+    button, .link { width: 100%; display: block; border: 0; border-radius: 11px; padding: 14px 16px; font-size: 15px; font-weight: 700; text-align: center; text-decoration: none; cursor: pointer; }
+    button { background: #76e0bb; color: #07140f; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .secondary { background: #253247; color: #e8edf5; margin-top: 10px; }
+    .danger { background: #48252b; color: #ffc4c8; margin-top: 10px; }
+    .link { color: #91d6ff; background: #14283a; margin-top: 12px; }
+    #status { min-height: 22px; color: #76e0bb; font-size: 13px; margin-top: 12px; }
+    #status.error { color: #ff9ea6; }
+    #membership { white-space: pre-line; color: #d2dbea; font-size: 13px; }
+    .small { color: #7f8da1; font-size: 12px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">BOTMOTHER / DEEPSEEK</div>
+    <h1>ورود به استخر مشارکتی</h1>
+    <p>کلید API خودت را با رضایت به استخر اضافه کن. پس از تأیید، خدمات ربات برایت فعال می‌شود و درخواست‌ها به‌صورت چرخشی بین کلیدهای فعال پخش می‌شوند.</p>
+
+    <section class="panel">
+      <div id="membership">در حال بررسی وضعیت عضویت…</div>
+      <a class="link" href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">ساخت کلید در صفحهٔ رسمی DeepSeek</a>
+
+      <form id="form">
+        <label for="key">کلید DeepSeek</label>
+        <input id="key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="کلید API را وارد کن">
+        <label class="consent"><input id="consent" type="checkbox"><span>تأیید می‌کنم مالک یا مجاز به استفاده از این کلید هستم و اجازه می‌دهم کلید برای درخواست اعضای استخر هم استفاده شود. می‌توانم هر زمان آن را از استخر حذف کنم.</span></label>
+        <button id="submit" type="submit">بررسی و افزودن کلید</button>
+      </form>
+      <button id="refresh" class="secondary" type="button">به‌روزرسانی وضعیت</button>
+      <button id="remove" class="danger" type="button" hidden>حذف کلید من از استخر</button>
+      <div id="status" role="status" aria-live="polite"></div>
+      <p class="small">کلید در پیام چت ذخیره نمی‌شود. Botmother آن را برای درخواست DeepSeek به‌کار می‌برد؛ هرگز کلید را در Git یا پیام عمومی قرار نده.</p>
+    </section>
+  </main>
+  <script>
+    const tg = window.Telegram?.WebApp;
+    const form = document.getElementById('form');
+    const keyInput = document.getElementById('key');
+    const consent = document.getElementById('consent');
+    const statusEl = document.getElementById('status');
+    const membership = document.getElementById('membership');
+    const removeButton = document.getElementById('remove');
+    tg?.ready();
+    tg?.expand();
+
+    function callEndpoint(name, input = {}) {
+      return new Promise((resolve, reject) => {
+        if (!tg?.initData || !tg?.Serverless?.call) return reject(new Error('این Mini App را از داخل ربات تلگرام باز کن.'));
+        tg.Serverless.call(name, input, (error, result) => {
+          if (error) reject(new Error(error.message || 'درخواست انجام نشد.'));
+          else resolve(result);
+        });
+      });
+    }
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle('error', isError);
+    }
+
+    async function refreshStatus() {
+      try {
+        const result = await callEndpoint('getPoolStatus');
+        if (!result.joined) {
+          membership.textContent = 'هنوز کلیدی به استخر اضافه نکرده‌ای.';
+          removeButton.hidden = true;
+          return;
+        }
+        const state = result.status === 'active' ? 'فعال' : 'موقتاً کنار گذاشته شده؛ کلید را دوباره ثبت کن';
+        membership.textContent = `وضعیت: ${state}\nدرخواست موفق: ${result.requestCount}\nتوکن‌های ورودی/خروجی: ${result.promptTokens}/${result.completionTokens}`;
+        removeButton.hidden = false;
+      } catch (error) {
+        membership.textContent = 'وضعیت عضویت در دسترس نیست.';
+        setStatus(error.message, true);
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const key = keyInput.value.trim();
+      if (!key) return setStatus('ابتدا کلید DeepSeek را وارد کن.', true);
+      if (!consent.checked) return setStatus('برای افزودن کلید به استخر، رضایت را تأیید کن.', true);
+      document.getElementById('submit').disabled = true;
+      setStatus('در حال بررسی کلید…');
+      try {
+        const result = await callEndpoint('registerKey', { key, consent: true });
+        keyInput.value = '';
+        consent.checked = false;
+        setStatus(`${result.message || 'کلید به استخر اضافه شد.'} به ربات برگرد و /start را بزن.`);
+        await refreshStatus();
+      } catch (error) {
+        setStatus(error.message, true);
+      } finally {
+        document.getElementById('submit').disabled = false;
+      }
+    });
+
+    removeButton.addEventListener('click', async () => {
+      if (!window.confirm('کلیدت از استخر حذف شود؟')) return;
+      try {
+        const result = await callEndpoint('removeKey');
+        setStatus(result.message || 'کلید حذف شد.');
+        await refreshStatus();
+      } catch (error) {
+        setStatus(error.message, true);
+      }
+    });
+
+    document.getElementById('refresh').addEventListener('click', refreshStatus);
+    refreshStatus();
+  </script>
+</body>
+</html>

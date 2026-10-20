@@ -1,26 +1,31 @@
 {
   "name": "botmother",
   "version": "2.0.0",
-  "description": "®️SHΞN robotic™ — Serverless Telegram Bot Architect & Mother Engine on Cloudflare Workers",
-  "main": "src/index.js",
+  "description": "Botmother Telegram Serverless bot builder powered by a shared DeepSeek key pool",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "cloudflare:dev": "wrangler dev",
+    "cloudflare:deploy": "wrangler deploy",
+    "cloudflare:tail": "wrangler tail",
+    "tgcloud:login": "tgcloud login",
+    "configure:serverless": "node scripts/configure-serverless.js",
+    "deploy": "npm run configure:serverless && tgcloud push",
+    "migrate": "tgcloud migrate",
+    "status": "tgcloud status"
   },
   "keywords": [
     "telegram",
     "telegram-bot",
-    "cloudflare-workers",
+    "telegram-serverless",
     "serverless",
     "bot-builder",
-    "llama3",
-    "workers-ai"
+    "deepseek",
+    "ai"
   ],
   "author": "SHΞЯVIN™ (☬SHΞN™ Lab)",
   "license": "MIT",
   "devDependencies": {
+    "@tgcloud/cli": "^0.2.0",
     "wrangler": "^3.114.0"
   }
 }

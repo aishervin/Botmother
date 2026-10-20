@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.tgcloud/
 
 # Cloudflare Wrangler
 .wrangler/
@@ -9,6 +10,7 @@ node_modules/
 .env
 .env.local
 *.pem
+tgcloud/lib/config.js
 
 # OS & Logs
 .DS_Store
