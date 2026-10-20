@@ -20,7 +20,18 @@ jobs:
         with:
           node-version: 20
 
+      - name: Check Secrets
+        id: check_secrets
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ]; then
+            echo "::warning ::CLOUDFLARE_API_TOKEN is not set in GitHub Secrets. Skipping automatic CI/CD deployment. You can deploy directly using 'npx wrangler deploy'."
+            echo "has_token=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_token=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Deploy Worker via Wrangler
+        if: steps.check_secrets.outputs.has_token == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

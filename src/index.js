@@ -8,6 +8,15 @@ const CHANNEL = "aishervin";
 const AI_MODEL = "@cf/meta/llama-3.1-8b-instruct";
 const AGENT_NAME = "®️SHΞN robotic™ | Botmother Studio";
 
+// Safe HTML Escape for Telegram messages
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 // ════════════════════════════════════════════════════════════════
 //  AES-GCM Encryption for Cloudflare Tokens
 // ════════════════════════════════════════════════════════════════
@@ -38,7 +47,7 @@ async function decrypt(stored, secret) {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  Telegram API Client Helpers
+//  Telegram API Client Helpers (With Safe HTML & Fallback)
 // ════════════════════════════════════════════════════════════════
 async function tg(token, method, body) {
   try {
@@ -55,7 +64,7 @@ async function tg(token, method, body) {
 }
 
 async function tgEdit(token, chatId, messageId, text, keyboard) {
-  return tg(token, "editMessageText", {
+  let res = await tg(token, "editMessageText", {
     chat_id: chatId,
     message_id: messageId,
     text,
@@ -63,16 +72,45 @@ async function tgEdit(token, chatId, messageId, text, keyboard) {
     disable_web_page_preview: true,
     reply_markup: keyboard,
   });
+
+  // If HTML entity parsing fails or message is not modified, retry cleanly
+  if (!res.ok) {
+    if (res.description?.includes("message is not modified")) {
+      return { ok: true, result: { message_id: messageId } };
+    }
+    const cleanText = text.replace(/<[^>]*>/g, "");
+    res = await tg(token, "editMessageText", {
+      chat_id: chatId,
+      message_id: messageId,
+      text: cleanText,
+      disable_web_page_preview: true,
+      reply_markup: keyboard,
+    });
+  }
+  return res;
 }
 
 async function tgSend(token, chatId, text, keyboard) {
-  const res = await tg(token, "sendMessage", {
+  let res = await tg(token, "sendMessage", {
     chat_id: chatId,
     text,
     parse_mode: "HTML",
     disable_web_page_preview: true,
     reply_markup: keyboard,
   });
+
+  // If Telegram rejects HTML formatting, strip tags and send as plain text
+  if (!res.ok) {
+    console.warn("tgSend HTML fallback triggered:", res.description);
+    const cleanText = text.replace(/<[^>]*>/g, "");
+    res = await tg(token, "sendMessage", {
+      chat_id: chatId,
+      text: cleanText,
+      disable_web_page_preview: true,
+      reply_markup: keyboard,
+    });
+  }
+
   return res?.result?.message_id;
 }
 
@@ -121,22 +159,6 @@ async function clearState(userId, env) {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  Channel Membership Check (Fail-Open)
-// ════════════════════════════════════════════════════════════════
-async function isChannelMember(userId, env) {
-  try {
-    const res = await tg(env.BOT_TOKEN, "getChatMember", { chat_id: `@${CHANNEL}`, user_id: userId });
-    if (!res || !res.ok) {
-      return true; // Fail-open to avoid locking out admins or users on API restrictions
-    }
-    const status = res?.result?.status;
-    return status === "member" || status === "administrator" || status === "creator";
-  } catch (err) {
-    return true; // Fail-open
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
 //  Cloudflare Token Verification & Subdomain
 // ════════════════════════════════════════════════════════════════
 async function verifyCfToken(token) {
@@ -178,18 +200,7 @@ async function verifyCfToken(token) {
     }
   } catch (e) {}
 
-  // 3. Check Workers scripts endpoint
-  try {
-    const res = await fetch("https://api.cloudflare.com/client/v4/accounts/d809a2f87ac80fd22a84195bd0ddc528/workers/scripts", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    if (data.success) {
-      return { ok: true, accountId: "d809a2f87ac80fd22a84195bd0ddc528", accountName: "Cloudflare Workers" };
-    }
-  } catch (e) {}
-
-  // 4. Fallback for valid token format
+  // 3. Fallback for valid token format
   if (token.length >= 30) {
     return { ok: true, accountId: "d809a2f87ac80fd22a84195bd0ddc528", accountName: "حساب ابری Cloudflare" };
   }
@@ -210,15 +221,14 @@ async function getWorkersSubdomain(cfToken, accountId) {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  AI Consultant & Generator (Workers AI)
+//  AI Consultant (Workers AI with High Quality Persian Guidance)
 // ════════════════════════════════════════════════════════════════
 async function aiConsultant(userPrompt, contextHistory = [], env) {
-  const systemPrompt = `You are the chief AI architect of "®️SHΞN robotic™" (Telegram Bot Builder).
-Your goal is to guide the user professionally in Persian, understand what Telegram bot they want to build, offer smart suggestions for customization, and reach an agreement on the bot's specification.
-
-Always respond in warm, polite, professional Persian with clear structure.
-Keep answers concise (under 120 words), well-formatted with bullet points and emojis.
-Conclude with a clear next step or suggestion.`;
+  const systemPrompt = `شما معمار ارشد و هوشمند ربات‌ساز "®️SHΞN robotic™" هستید.
+وظیفه شما راهنمایی کاربر به زبان فارسی روان، جذاب، کاملاً تخصصی و محترمانه است.
+ایده و نیازمندی کاربر برای ساخت ربات تلگرام را تحلیل کنید، پیشنهادهای دقیق و هوشمندانه بدهید و مشخصات فنی را تنظیم کنید.
+پاسخ‌ها خوانا، پرانرژی، با بولت‌پوینت و ایموجی باشند (حداکثر ۹۰ کلمه).
+در پایان همیشه یک پیشنهاد واضح برای ادامه بگذارید.`;
 
   const messages = [
     { role: "system", content: systemPrompt },
@@ -229,8 +239,8 @@ Conclude with a clear next step or suggestion.`;
   try {
     if (env.AI) {
       const res = await env.AI.run(AI_MODEL, { messages });
-      const text = res?.response || res || "";
-      if (text && text.trim().length > 10) {
+      const text = res?.response || (typeof res === "string" ? res : "");
+      if (text && text.trim().length > 5) {
         return text.trim();
       }
     }
@@ -238,7 +248,7 @@ Conclude with a clear next step or suggestion.`;
     console.error("aiConsultant error:", e);
   }
 
-  return `ایده بسیار عالی و کاربردی است! 🌟\n\nمی‌توانیم این ربات را با معماری سرورلس Cloudflare پیاده‌سازی کنیم تا بدون قطعی و با سرعت میلی‌ثانیه‌ای پاسخ دهد.\n\nآیا قابلیت یا بخش خاصی مد نظرتان هست که اضافه کنیم، یا همین سناریو را نهایی کرده و سراغ راه‌اندازی برویم؟`;
+  return `ایده بسیار عالی و کاربردی است! 🌟\n\nما این ربات را بر روی زیرساخت Cloudflare Workers پیاده‌سازی می‌کنیم تا سرعت اجرای میلی‌ثانیه‌ای و آپ‌تایم ۱۰۰٪ داشته باشد.\n\nآیا قابلیت یا شخصی‌سازی خاصی مد نظرتان هست (مثل ارسال گزارش، تغییر دکمه‌ها یا پیام خوش‌آمد) یا همین مشخصات را تأیید می‌کنید تا برویم سراغ مرحله بعد؟`;
 }
 
 // Generate custom worker code when requested
@@ -328,6 +338,7 @@ async function deployBot({ cfToken, accountId, botToken, templateId, custom = {}
       body,
     }
   );
+
   const uploadData = await uploadRes.json();
   if (!uploadData.success) {
     const errText = uploadData.errors?.map((e) => e.message).join(", ") || JSON.stringify(uploadData.errors);
@@ -359,6 +370,7 @@ async function deployBot({ cfToken, accountId, botToken, templateId, custom = {}
       allowed_updates: ["message", "callback_query"],
     }),
   });
+
   const webhookData = await webhookRes.json();
   if (!webhookData.ok) {
     throw new Error(`خطا در تنظیم وب‌هوک تلگرام: ${webhookData.description}`);
@@ -380,38 +392,32 @@ function kb(rows) {
   return { inline_keyboard: rows };
 }
 
-function btn(text, data, style) {
-  const b = { text, callback_data: data };
-  if (style) b.style = style;
-  return b;
+function btn(text, data) {
+  return { text, callback_data: data };
 }
 
-function urlBtn(text, url, style) {
-  const b = { text, url };
-  if (style) b.style = style;
-  return b;
+function urlBtn(text, url) {
+  return { text, url };
 }
 
-function webAppBtn(text, url, style) {
-  const b = { text, web_app: { url } };
-  if (style) b.style = style;
-  return b;
+function webAppBtn(text, url) {
+  return { text, web_app: { url } };
 }
 
 // ── Screen 0: Connect Cloudflare FIRST (Entry screen if not connected) ──
 function screenConnectCfFirst(userName, baseUrl) {
-  const text = `👋 <b>درود ${userName || "کاربر گرامی"}، به ${AGENT_NAME} خوش آمدید!</b> ⚡️
+  const text = `👋 <b>درود ${escapeHtml(userName || "کاربر گرامی")}، به ${AGENT_NAME} خوش آمدید!</b> ⚡️
 
 موتور پردازش، هوش مصنوعی (Workers AI)، حافظه ابری و سرورهای سرورلس این سیستم به صورت مستقیم روی زیرساخت لبه <b>Cloudflare</b> شما اجرا می‌شوند.
 
 ⚠️ <b>گام ۱: اتصال حساب Cloudflare</b>
 برای فعال‌سازی مغز هوش مصنوعی ایجنت و شروع فرآیند مشاوره و ساخت ربات، ابتدا حساب Cloudflare خود را متصل فرمایید:
 
-👇 روی دکمه سفید زیر بزنید تا صفحه مینی‌اپ باز شود، یا <b>توکن Cloudflare خود را مستقیماً همینجا در چت ارسال فرمایید</b>:`;
+👇 روی دکمه مینی‌اپ زیر بزنید یا <b>توکن Cloudflare خود را مستقیماً همینجا در چت ارسال فرمایید</b>:`;
 
   const keyboard = kb([
-    [webAppBtn("🔗 صفحه اتصال Cloudflare (Mini App)", baseUrl, "primary")],
-    [urlBtn("🔑 ساخت توکن در داشبورد کلودفلر", "https://dash.cloudflare.com/profile/api-tokens", "primary")],
+    [webAppBtn("🔗 صفحه اتصال Cloudflare (Mini App)", baseUrl)],
+    [urlBtn("🔑 ساخت توکن در داشبورد کلودفلر", "https://dash.cloudflare.com/profile/api-tokens")],
   ]);
 
   return { text, keyboard };
@@ -419,9 +425,9 @@ function screenConnectCfFirst(userName, baseUrl) {
 
 // ── Screen 1: Introduction & Top Categories (Once Cloudflare is active) ──
 function screenIntro(userName, cfAccountName) {
-  const text = `👋 <b>درود ${userName || "کاربر گرامی"}، معمار هوشمند ربات در خدمت شماست!</b> 🧠✨
+  const text = `👋 <b>درود ${escapeHtml(userName || "کاربر گرامی")}، معمار هوشمند ربات در خدمت شماست!</b> 🧠✨
 
-☁️ <b>وضعیت حساب Cloudflare:</b> متصل (<code>${cfAccountName || "فعال"}</code>) ✅
+☁️ <b>وضعیت حساب Cloudflare:</b> متصل (<code>${escapeHtml(cfAccountName || "فعال")}</code>) ✅
 ⚡️ <b>موتور هوش مصنوعی و سرورلس:</b> آماده پردازش روی شبکه لبه (Edge)
 
 من معمار اختصاصی شما هستم. وظیفه من تحلیل ایده شما، مشاوره، شخصی‌سازی و در نهایت <b>استقرار زنده روی Cloudflare و تحویل سورس‌کد کامل پروژه</b> است.
@@ -430,12 +436,12 @@ function screenIntro(userName, cfAccountName) {
 یکی از دسته‌بندی‌های زیر را انتخاب کنید یا سناریوی مورد نظرتان را همینجا تایپ فرمایید:`;
 
   const keyboard = kb([
-    [btn("🤖 هوش مصنوعی و چت‌بات سخنگو", "cat:ai_chat", "primary")],
-    [btn("📢 مدیریت کانال و عضویت اجباری", "cat:channel_mgr", "primary")],
-    [btn("🛍️ فروشگاهی، کاتالوگ و ثبت سفارش", "cat:store", "primary")],
-    [btn("🛠️ ابزاری، دستیار و پردازش اطلاعات", "cat:utility", "primary")],
-    [btn("💡 سناریو و ایده آزاد من (AI Custom)", "cat:custom", "success")],
-    [btn("🔄 تعویض یا تنظیم مجدد حساب Cloudflare", "cat:cf_settings", "primary")],
+    [btn("🤖 هوش مصنوعی و چت‌بات سخنگو", "cat:ai_chat")],
+    [btn("📢 مدیریت کانال و عضویت اجباری", "cat:channel_mgr")],
+    [btn("🛍️ فروشگاهی، کاتالوگ و ثبت سفارش", "cat:store")],
+    [btn("🛠️ ابزاری، دستیار و پردازش اطلاعات", "cat:utility")],
+    [btn("💡 سناریو و ایده آزاد من (AI Custom)", "cat:custom")],
+    [btn("🔄 تعویض یا تنظیم مجدد حساب Cloudflare", "cat:cf_settings")],
   ]);
 
   return { text, keyboard };
@@ -445,26 +451,24 @@ function screenIntro(userName, cfAccountName) {
 function screenConsulting(spec, aiResponse = null) {
   let details = "";
   if (spec.templateId === "ai_chat") {
-    details = `• <b>مدل هوش مصنوعی:</b> Llama-3.1 Ultra Fast\n• <b>لحن / پرامپت:</b> ${spec.custom?.systemPrompt || "دستیار هوشمند فارسی و محترمانه"}`;
+    details = `• <b>مدل هوش مصنوعی:</b> Llama-3.1 Ultra Fast\n• <b>لحن / پرامپت:</b> ${escapeHtml(spec.custom?.systemPrompt || "دستیار هوشمند فارسی و محترمانه")}`;
   } else if (spec.templateId === "channel_mgr") {
-    details = `• <b>کانال هدف:</b> @${spec.custom?.channelUsername || CHANNEL}\n• <b>پیام خوش‌آمد:</b> ${spec.custom?.welcomeText || "پیش‌فرض"}`;
+    details = `• <b>کانال هدف:</b> @${escapeHtml(spec.custom?.channelUsername || CHANNEL)}\n• <b>پیام خوش‌آمد:</b> ${escapeHtml(spec.custom?.welcomeText || "پیش‌فرض")}`;
   } else if (spec.templateId === "store") {
-    details = `• <b>نام فروشگاه:</b> ${spec.custom?.storeName || "فروشگاه اختصاصی"}\n• <b>امکانات:</b> کاتالوگ محصولات + فرم ثبت سفارش مستقیم`;
+    details = `• <b>نام فروشگاه:</b> ${escapeHtml(spec.custom?.storeName || "فروشگاه اختصاصی")}\n• <b>امکانات:</b> کاتالوگ محصولات + فرم ثبت سفارش مستقیم`;
   } else if (spec.templateId === "utility") {
     details = `• <b>ابزارها:</b> شناسایی اکانت، پینگ سرور، پردازش متن`;
   } else {
-    details = `• <b>سناریوی اختصاصی:</b> ${spec.customDesc || "بر اساس توضیحات کاربر"}`;
+    details = `• <b>سناریوی اختصاصی:</b> ${escapeHtml(spec.customDesc || "بر اساس توضیحات کاربر")}`;
   }
 
-  const aiNote = aiResponse ? `\n💡 <b>تحلیل و پیشنهاد معمار:</b>\n${aiResponse}\n` : "";
+  const aiNote = aiResponse ? `\n💡 <b>تحلیل و پیشنهاد معمار:</b>\n${escapeHtml(aiResponse)}\n` : "";
 
-  const text = `🎯 <b>مشاوره و شخصی‌سازی سناریو:</b>\n\n<b>عنوان:</b> ${spec.title}\n${details}\n${aiNote}
-اگر مایلید گزینه‌ای را تغییر دهید (مثلاً لحن چت، نام کانال یا امکانات)، <b>همینجا در چت بنویسید</b>.
-در غیر این صورت، برای تأیید مشخصات و دریافت توکن تلگرام دکمه زیر را بزنید:`;
+  const text = `🎯 <b>مشاوره و شخصی‌سازی سناریو:</b>\n\n<b>عنوان:</b> ${escapeHtml(spec.title)}\n${details}\n${aiNote}\nاگر مایلید گزینه‌ای را تغییر دهید (مثلاً لحن چت، نام کانال یا امکانات)، <b>همینجا در چت بنویسید</b>.\n\nدر غیر این صورت، برای تأیید مشخصات و دریافت توکن تلگرام دکمه زیر را بزنید:`;
 
   const keyboard = kb([
-    [btn("✅ تأیید سناریو و ادامه", "agree_spec", "success")],
-    [btn("🔄 بازگشت به سرشاخه‌ها", "restart", "danger")],
+    [btn("✅ تأیید سناریو و ادامه", "agree_spec")],
+    [btn("🔄 بازگشت به سرشاخه‌ها", "restart")],
   ]);
 
   return { text, keyboard };
@@ -473,9 +477,9 @@ function screenConsulting(spec, aiResponse = null) {
 // ── Screen 3: Key Collection (BotFather Token) ──
 function screenAskBotToken(spec, cfAccountName) {
   const text = `📋 <b>مشخصات فنی و معماری ربات توافق‌شده:</b>
-• <b>عنوان سناریو:</b> ${spec.title}
+• <b>عنوان سناریو:</b> ${escapeHtml(spec.title)}
 • <b>معماری میزبان:</b> Cloudflare Workers (سرورلس بدون قطعی)
-• <b>حساب Cloudflare متصل:</b> <code>${cfAccountName || "فعال"}</code> ✅
+• <b>حساب Cloudflare متصل:</b> <code>${escapeHtml(cfAccountName || "فعال")}</code> ✅
 • <b>خروجی نهایی:</b> استقرار زنده وب‌هوک + تحویل فایل سورس‌کد کامل (.mjs)
 
 🔑 <b>گام نهایی: دریافت توکن ربات تلگرام</b>
@@ -485,8 +489,8 @@ function screenAskBotToken(spec, cfAccountName) {
 <code>123456789:ABCdefGHIjklMNOpqrsTUVwxyz</code>`;
 
   const keyboard = kb([
-    [urlBtn("🤖 رفتن به @BotFather", "https://t.me/BotFather", "primary")],
-    [btn("🔄 بازگشت و تغییر سناریو", "back_to_spec", "danger")],
+    [urlBtn("🤖 رفتن به @BotFather", "https://t.me/BotFather")],
+    [btn("🔄 بازگشت و تغییر سناریو", "back_to_spec")],
   ]);
 
   return { text, keyboard };
@@ -496,17 +500,17 @@ function screenAskBotToken(spec, cfAccountName) {
 function screenPreFlight(spec, botUsername, botFirstName, cfAccountName) {
   const text = `🚀 <b>همه چیز برای ساخت و استقرار آماده است!</b>
 
-🤖 <b>ربات مقصد:</b> <code>@${botUsername}</code> (${botFirstName})
-🎯 <b>سناریوی اجرایی:</b> ${spec.title}
-☁️ <b>میزبان ابری:</b> Cloudflare Workers (<code>${cfAccountName}</code>)
+🤖 <b>ربات مقصد:</b> <code>@${escapeHtml(botUsername)}</code> (${escapeHtml(botFirstName)})
+🎯 <b>سناریوی اجرایی:</b> ${escapeHtml(spec.title)}
+☁️ <b>میزبان ابری:</b> Cloudflare Workers (<code>${escapeHtml(cfAccountName)}</code>)
 📦 <b>خروجی:</b> استقرار آنلاین وب‌هوک + ارسال فایل سورس کد کامل
 
 آیا برای ساخت نهایی و استقرار آنلاین تأیید می‌فرمایید؟`;
 
   const keyboard = kb([
-    [btn("🚀 تأیید نهایی و آغاز ساخت", "start_build", "success")],
-    [btn("✏️ ویرایش مشخصات", "back_to_spec", "primary")],
-    [btn("❌ انصراف و شروع مجدد", "restart", "danger")],
+    [btn("🚀 تأیید نهایی و آغاز ساخت", "start_build")],
+    [btn("✏️ ویرایش مشخصات", "back_to_spec")],
+    [btn("❌ انصراف و شروع مجدد", "restart")],
   ]);
 
   return { text, keyboard };
@@ -530,16 +534,16 @@ function screenDeploying() {
 function screenDeployed(result) {
   const text = `🎉 <b>تبریک! ربات شما با موفقیت ساخته، مستقر و آنلاین شد!</b>
 
-🤖 <b>آیدی ربات شما:</b> <code>@${result.botUsername}</code>
-🌐 <b>آدرس ورکر ابری:</b> <code>${result.workerUrl}</code>
+🤖 <b>آیدی ربات شما:</b> <code>@${escapeHtml(result.botUsername)}</code>
+🌐 <b>آدرس ورکر ابری:</b> <code>${escapeHtml(result.workerUrl)}</code>
 ⚡️ <b>وضعیت:</b> آنلاین و آماده پاسخگویی در تلگرام
 
 📦 <b>فایل سورس کد کامل پروژه نیز در پیام زیر برای شما ارسال شد 👇</b>`;
 
   const keyboard = kb([
-    [urlBtn(`🤖 ورود به ربات @${result.botUsername}`, `https://t.me/${result.botUsername}`, "success")],
-    [btn("📥 دریافت مجدد سورس‌کد", "download_source", "primary")],
-    [btn("🏗️ ساخت یک ربات جدید", "restart", "danger")],
+    [urlBtn(`🤖 ورود به ربات @${result.botUsername}`, `https://t.me/${result.botUsername}`)],
+    [btn("📥 دریافت مجدد سورس‌کد", "download_source")],
+    [btn("🏗️ ساخت یک ربات جدید", "restart")],
   ]);
 
   return { text, keyboard };
@@ -548,14 +552,14 @@ function screenDeployed(result) {
 // ── Screen 7: Cloudflare Settings ──
 function screenCfSettings(cfConnected, cfAccountName, baseUrl) {
   const status = cfConnected
-    ? `✅ <b>حساب Cloudflare شما متصل است.</b>\n• نام حساب: <code>${cfAccountName}</code>\n\nبرای تعویض توکن، می‌توانید توکن جدید را ارسال کنید یا از دکمه زیر استفاده نمایید:`
+    ? `✅ <b>حساب Cloudflare شما متصل است.</b>\n• نام حساب: <code>${escapeHtml(cfAccountName)}</code>\n\nبرای تعویض توکن، می‌توانید توکن جدید را ارسال کنید یا از دکمه زیر استفاده نمایید:`
     : `☁️ <b>حساب Cloudflare متصل نیست.</b>\n\nبرای شروع، ابتدا باید حساب Cloudflare خود را متصل کنید. روی دکمه زیر بزنید یا توکن API خود را مستقیماً در چت بفرستید:`;
 
   return {
     text: `☁️ <b>مدیریت حساب Cloudflare</b>\n\n${status}`,
     keyboard: kb([
-      [webAppBtn("🔗 صفحه اتصال Cloudflare (Mini App)", baseUrl, "primary")],
-      [btn("🔙 بازگشت به منوی اصلی", "restart", "primary")],
+      [webAppBtn("🔗 صفحه اتصال Cloudflare (Mini App)", baseUrl)],
+      [btn("🔙 بازگشت به منوی اصلی", "restart")],
     ]),
   };
 }
@@ -563,9 +567,9 @@ function screenCfSettings(cfConnected, cfAccountName, baseUrl) {
 // ════════════════════════════════════════════════════════════════
 //  Wizard Engine & Navigation
 // ════════════════════════════════════════════════════════════════
-async function showScreen(env, userId, chatId, screen, state) {
+async function showScreen(env, userId, chatId, screen, state, forceNew = false) {
   state = state || (await getState(userId, env)) || {};
-  const messageId = state.messageId;
+  let messageId = forceNew ? null : state.messageId;
 
   if (messageId) {
     const res = await tgEdit(env.BOT_TOKEN, chatId, messageId, screen.text, screen.keyboard);
@@ -597,178 +601,185 @@ async function startWizard(env, userId, chatId, userName) {
     chatHistory: [],
   };
 
+  // Always send a fresh message for /start so the user sees it at the bottom
   if (!cfStored) {
-    await showScreen(env, userId, chatId, screenConnectCfFirst(userName, baseUrl), state);
+    await showScreen(env, userId, chatId, screenConnectCfFirst(userName, baseUrl), state, true);
   } else {
-    await showScreen(env, userId, chatId, screenIntro(userName, cfData.accountName), state);
+    await showScreen(env, userId, chatId, screenIntro(userName, cfData.accountName), state, true);
   }
 }
 
 // ════════════════════════════════════════════════════════════════
-//  Callback Query Handler
+//  Callback Query Handler (Inline Buttons)
 // ════════════════════════════════════════════════════════════════
 async function handleCallback(callback, env) {
   const userId = callback.from.id;
-  const chatId = callback.message.chat.id;
+  const chatId = callback.message?.chat?.id || userId;
   const data = callback.data;
   const userName = callback.from.first_name || "کاربر";
 
-  await tg(env.BOT_TOKEN, "answerCallbackQuery", { callback_query_id: callback.id });
-  let state = (await getState(userId, env)) || { userId, chatId, userName, step: "categories" };
-  const baseUrl = `https://${env.WORKER_DOMAIN || "botmother.shen-zero.workers.dev"}`;
+  try {
+    // 1. Immediately acknowledge the callback query so UI stops spinning
+    await tg(env.BOT_TOKEN, "answerCallbackQuery", { callback_query_id: callback.id });
 
-  // ── Restart / Main Menu ──
-  if (data === "restart") {
-    await clearState(userId, env);
-    await startWizard(env, userId, chatId, userName);
-    return;
-  }
+    let state = (await getState(userId, env)) || { userId, chatId, userName, step: "categories" };
+    state.messageId = callback.message?.message_id;
+    const baseUrl = `https://${env.WORKER_DOMAIN || "botmother.shen-zero.workers.dev"}`;
 
-  // ── Cloudflare Settings screen ──
-  if (data === "cat:cf_settings") {
-    const cfStored = await env.KV.get(`cf:${userId}`);
-    const cfDataRaw = await env.KV.get(`cfdata:${userId}`);
-    const cfData = cfDataRaw ? JSON.parse(cfDataRaw) : {};
-    state.step = "cf_settings";
-    await showScreen(env, userId, chatId, screenCfSettings(!!cfStored, cfData.accountName, baseUrl), state);
-    return;
-  }
-
-  // ── Category Selection ──
-  if (data.startsWith("cat:")) {
-    const cat = data.slice(4);
-    let title = "ربات اختصاصی";
-    let templateId = cat;
-    let custom = {};
-
-    if (cat === "ai_chat") {
-      title = "🤖 ربات چت هوش مصنوعی (Llama-3)";
-      custom.systemPrompt = "شما یک دستیار هوشمند و خوش‌برخورد به زبان فارسی هستید.";
-    } else if (cat === "channel_mgr") {
-      title = "📢 مدیریت کانال و عضویت اجباری";
-      custom.channelUsername = CHANNEL;
-      custom.welcomeText = "به ربات ما خوش آمدید!";
-    } else if (cat === "store") {
-      title = "🛍️ ربات فروشگاهی و کاتالوگ";
-      custom.storeName = "فروشگاه آنلاین";
-    } else if (cat === "utility") {
-      title = "🛠️ ربات ابزاری و دستیار اطلاعات";
-    } else if (cat === "custom") {
-      title = "💡 ایده و سناریوی آزاد (AI Custom)";
-      templateId = "custom";
-    }
-
-    state.spec = { title, templateId, custom, customDesc: "" };
-    state.step = "consulting";
-
-    const consultMsg = await aiConsultant(`کاربر دسته "${title}" را انتخاب کرده است. یک پیشنهاد اولیه و راهنمایی بده.`, [], env);
-    await showScreen(env, userId, chatId, screenConsulting(state.spec, consultMsg), state);
-    return;
-  }
-
-  // ── Agree Spec → Go to BotFather Token Collection ──
-  if (data === "agree_spec") {
-    state.step = "ask_bot_token";
-    const cfDataRaw = await env.KV.get(`cfdata:${userId}`);
-    const cfData = cfDataRaw ? JSON.parse(cfDataRaw) : {};
-
-    await showScreen(env, userId, chatId, screenAskBotToken(state.spec, cfData.accountName), state);
-    return;
-  }
-
-  // ── Back to Spec screen ──
-  if (data === "back_to_spec") {
-    state.step = "consulting";
-    await showScreen(env, userId, chatId, screenConsulting(state.spec), state);
-    return;
-  }
-
-  // ── Start Build ──
-  if (data === "start_build") {
-    const cfStored = await env.KV.get(`cf:${userId}`);
-    if (!cfStored) {
-      state.step = "connect_cf_first";
-      await showScreen(env, userId, chatId, screenConnectCfFirst(userName, baseUrl), state);
+    // ── Restart / Main Menu ──
+    if (data === "restart") {
+      await clearState(userId, env);
+      await startWizard(env, userId, chatId, userName);
       return;
     }
 
-    const cfToken = await decrypt(cfStored, env.MASTER_SECRET);
-    const cfData = JSON.parse((await env.KV.get(`cfdata:${userId}`)) || "{}");
-
-    if (!state.botToken) {
-      state.step = "ask_bot_token";
-      await showScreen(env, userId, chatId, screenAskBotToken(state.spec, cfData.accountName), state);
+    // ── Cloudflare Settings screen ──
+    if (data === "cat:cf_settings") {
+      const cfStored = await env.KV.get(`cf:${userId}`);
+      const cfDataRaw = await env.KV.get(`cfdata:${userId}`);
+      const cfData = cfDataRaw ? JSON.parse(cfDataRaw) : {};
+      state.step = "cf_settings";
+      await showScreen(env, userId, chatId, screenCfSettings(!!cfStored, cfData.accountName, baseUrl), state, false);
       return;
     }
 
-    // Show Deploying screen with estimated time
-    state.step = "deploying";
-    await showScreen(env, userId, chatId, screenDeploying(), state);
+    // ── Category Selection ──
+    if (data.startsWith("cat:")) {
+      const cat = data.slice(4);
+      let title = "ربات اختصاصی";
+      let templateId = cat;
+      let custom = {};
 
-    try {
-      let customCode = null;
-      if (state.spec.templateId === "custom") {
-        customCode = await generateCustomBot(state.spec.customDesc || state.spec.title, state.spec.custom, env);
+      if (cat === "ai_chat") {
+        title = "🤖 ربات چت هوش مصنوعی (Llama-3)";
+        custom.systemPrompt = "شما یک دستیار هوشمند و خوش‌برخورد به زبان فارسی هستید.";
+      } else if (cat === "channel_mgr") {
+        title = "📢 مدیریت کانال و عضویت اجباری";
+        custom.channelUsername = CHANNEL;
+        custom.welcomeText = "به ربات ما خوش آمدید!";
+      } else if (cat === "store") {
+        title = "🛍️ ربات فروشگاهی و کاتالوگ";
+        custom.storeName = "فروشگاه آنلاین";
+      } else if (cat === "utility") {
+        title = "🛠️ ربات ابزاری و دستیار اطلاعات";
+      } else if (cat === "custom") {
+        title = "💡 ایده و سناریوی آزاد (AI Custom)";
+        templateId = "custom";
       }
 
-      const result = await deployBot(
-        {
-          cfToken,
-          accountId: cfData.accountId,
-          botToken: state.botToken,
-          templateId: state.spec.templateId,
-          custom: state.spec.custom || {},
-          customCode,
-        },
-        env
-      );
+      state.spec = { title, templateId, custom, customDesc: "" };
+      state.step = "consulting";
 
-      state.step = "deployed";
-      state.deployResult = result;
+      const consultMsg = await aiConsultant(`کاربر دسته "${title}" را انتخاب کرده است. یک پیشنهاد اولیه و راهنمایی بده.`, [], env);
+      await showScreen(env, userId, chatId, screenConsulting(state.spec, consultMsg), state, false);
+      return;
+    }
 
-      // Show Deployed success screen
-      await showScreen(env, userId, chatId, screenDeployed(result), state);
+    // ── Agree Spec → Go to BotFather Token Collection ──
+    if (data === "agree_spec") {
+      state.step = "ask_bot_token";
+      const cfDataRaw = await env.KV.get(`cfdata:${userId}`);
+      const cfData = cfDataRaw ? JSON.parse(cfDataRaw) : {};
+      await showScreen(env, userId, chatId, screenAskBotToken(state.spec || { title: "ربات اختصاصی" }, cfData.accountName), state, false);
+      return;
+    }
 
-      // AUTOMATIC SOURCE CODE DELIVERY: Send the .mjs file directly in chat
-      if (result.sourceCode) {
+    // ── Back to Spec screen ──
+    if (data === "back_to_spec") {
+      state.step = "consulting";
+      await showScreen(env, userId, chatId, screenConsulting(state.spec || { title: "ربات اختصاصی" }), state, false);
+      return;
+    }
+
+    // ── Start Build ──
+    if (data === "start_build") {
+      const cfStored = await env.KV.get(`cf:${userId}`);
+      if (!cfStored) {
+        state.step = "connect_cf_first";
+        await showScreen(env, userId, chatId, screenConnectCfFirst(userName, baseUrl), state, false);
+        return;
+      }
+
+      const cfToken = await decrypt(cfStored, env.MASTER_SECRET);
+      const cfData = JSON.parse((await env.KV.get(`cfdata:${userId}`)) || "{}");
+
+      if (!state.botToken) {
+        state.step = "ask_bot_token";
+        await showScreen(env, userId, chatId, screenAskBotToken(state.spec, cfData.accountName), state, false);
+        return;
+      }
+
+      // Show Deploying screen with estimated time
+      state.step = "deploying";
+      await showScreen(env, userId, chatId, screenDeploying(), state, false);
+
+      try {
+        let customCode = null;
+        if (state.spec?.templateId === "custom") {
+          customCode = await generateCustomBot(state.spec.customDesc || state.spec.title, state.spec.custom, env);
+        }
+
+        const result = await deployBot(
+          {
+            cfToken,
+            accountId: cfData.accountId,
+            botToken: state.botToken,
+            templateId: state.spec?.templateId || "ai_chat",
+            custom: state.spec?.custom || {},
+            customCode,
+          },
+          env
+        );
+
+        state.step = "deployed";
+        state.deployResult = result;
+
+        // Show Deployed success screen
+        await showScreen(env, userId, chatId, screenDeployed(result), state, false);
+
+        // AUTOMATIC SOURCE CODE DELIVERY: Send the .mjs file directly in chat
+        if (result.sourceCode) {
+          await tgSendDocument(
+            env.BOT_TOKEN,
+            chatId,
+            result.sourceCode,
+            `${result.botUsername}-worker.mjs`,
+            `📦 <b>سورس‌کد کامل ربات @${escapeHtml(result.botUsername)}</b>\n⚡️ پلتفرم: Cloudflare Workers (ES Module)\n🛠 مهندسی و پیاده‌سازی: ${AGENT_NAME}`
+          );
+        }
+      } catch (err) {
+        console.error("Deploy error:", err);
+        await tg(env.BOT_TOKEN, "sendMessage", {
+          chat_id: chatId,
+          text: `❌ <b>خطا در فرآیند استقرار:</b>\n\n${escapeHtml(err.message)}\n\nلطفاً توکن‌ها را بررسی کنید یا مجدداً /start بزنید.`,
+          parse_mode: "HTML",
+        });
+      }
+      return;
+    }
+
+    // ── Download source code again ──
+    if (data === "download_source") {
+      const sourceCode = state.deployResult?.sourceCode;
+      const botUsername = state.deployResult?.botUsername || "bot";
+      if (sourceCode) {
         await tgSendDocument(
           env.BOT_TOKEN,
           chatId,
-          result.sourceCode,
-          `${result.botUsername}-worker.mjs`,
-          `📦 <b>سورس‌کد کامل ربات @${result.botUsername}</b>\n⚡️ پلتفرم: Cloudflare Workers (ES Module)\n🛠 مهندسی و پیاده‌سازی: ${AGENT_NAME}`
+          sourceCode,
+          `${botUsername}-worker.mjs`,
+          `📦 <b>سورس‌کد کامل ربات @${escapeHtml(botUsername)}</b>\n⚡️ Cloudflare Workers ES Module`
         );
+      } else {
+        await tg(env.BOT_TOKEN, "sendMessage", {
+          chat_id: chatId,
+          text: "⚠️ سورس‌کد در حافظه موقت موجود نیست. برای ساخت جدید /start بزنید.",
+        });
       }
-    } catch (err) {
-      console.error("Deploy error:", err);
-      await tg(env.BOT_TOKEN, "sendMessage", {
-        chat_id: chatId,
-        text: `❌ <b>خطا در فرآیند استقرار:</b>\n\n${err.message}\n\nلطفاً توکن‌ها را بررسی کنید یا مجدداً /start بزنید.`,
-        parse_mode: "HTML",
-      });
+      return;
     }
-    return;
-  }
-
-  // ── Download source code again ──
-  if (data === "download_source") {
-    const sourceCode = state.deployResult?.sourceCode;
-    const botUsername = state.deployResult?.botUsername || "bot";
-    if (sourceCode) {
-      await tgSendDocument(
-        env.BOT_TOKEN,
-        chatId,
-        sourceCode,
-        `${botUsername}-worker.mjs`,
-        `📦 <b>سورس‌کد کامل ربات @${botUsername}</b>\n⚡️ Cloudflare Workers ES Module`
-      );
-    } else {
-      await tg(env.BOT_TOKEN, "sendMessage", {
-        chat_id: chatId,
-        text: "⚠️ سورس‌کد در حافظه موقت موجود نیست. برای ساخت جدید /start بزنید.",
-      });
-    }
-    return;
+  } catch (err) {
+    console.error("handleCallback exception:", err);
   }
 }
 
@@ -776,134 +787,148 @@ async function handleCallback(callback, env) {
 //  Message Handler (Conversational & Commands)
 // ════════════════════════════════════════════════════════════════
 async function handleMessage(message, env) {
-  const userId = message.from.id;
-  const chatId = message.chat.id;
+  const userId = message.from?.id;
+  const chatId = message.chat?.id || userId;
+  if (!userId) return;
+
   const userName = message.from.first_name || "کاربر";
   const text = (message.text || "").trim();
   const baseUrl = `https://${env.WORKER_DOMAIN || "botmother.shen-zero.workers.dev"}`;
 
-  if (text === "/start") {
-    await clearState(userId, env);
-    await startWizard(env, userId, chatId, userName);
-    return;
-  }
-
-  let state = await getState(userId, env);
-  if (!state) {
-    await startWizard(env, userId, chatId, userName);
-    return;
-  }
-
-  // ── 1. Cloudflare Token Detection (direct paste) ──
-  if (text.startsWith("cfat_") || (text.length >= 30 && !text.includes(":") && !text.includes(" "))) {
-    await tg(env.BOT_TOKEN, "sendChatAction", { chat_id: chatId, action: "typing" });
-    const cfInfo = await verifyCfToken(text);
-    if (cfInfo.ok) {
-      const encrypted = await encrypt(text, env.MASTER_SECRET);
-      await env.KV.put(`cf:${userId}`, encrypted);
-      await env.KV.put(`cfdata:${userId}`, JSON.stringify({ accountId: cfInfo.accountId, accountName: cfInfo.accountName }));
-
-      await tg(env.BOT_TOKEN, "sendMessage", {
-        chat_id: chatId,
-        text: `☁️ <b>حساب Cloudflare متصل شد!</b> ✅\n• نام حساب: <code>${cfInfo.accountName}</code>\n🧠 <b>موتور هوش مصنوعی ایجنت فعال شد!</b>`,
-        parse_mode: "HTML",
-      });
-
-      // Transition immediately to the intelligent categories screen!
-      state.step = "categories";
-      await showScreen(env, userId, chatId, screenIntro(userName, cfInfo.accountName), state);
-      return;
-    } else {
-      await tg(env.BOT_TOKEN, "sendMessage", {
-        chat_id: chatId,
-        text: "⚠️ توکن ارسال‌شده Cloudflare معتبر نبود یا دسترسی لازم را نداشت. لطفاً مطمئن شوید توکن دسترسی <b>Workers Scripts: Edit</b> و <b>Account: Read</b> دارد.",
-        parse_mode: "HTML",
-      });
+  try {
+    if (text === "/start") {
+      await clearState(userId, env);
+      await startWizard(env, userId, chatId, userName);
       return;
     }
-  }
 
-  // ── Check if CF is connected before allowing conversational building ──
-  const cfStored = await env.KV.get(`cf:${userId}`);
-  if (!cfStored) {
+    let state = await getState(userId, env);
+    if (!state) {
+      await startWizard(env, userId, chatId, userName);
+      return;
+    }
+
+    // ── 1. Cloudflare Token Detection (direct paste) ──
+    if (text.startsWith("cfat_") || (text.length >= 30 && !text.includes(":") && !text.includes(" "))) {
+      await tg(env.BOT_TOKEN, "sendChatAction", { chat_id: chatId, action: "typing" });
+      const cfInfo = await verifyCfToken(text);
+      if (cfInfo.ok) {
+        const encrypted = await encrypt(text, env.MASTER_SECRET);
+        await env.KV.put(`cf:${userId}`, encrypted);
+        await env.KV.put(`cfdata:${userId}`, JSON.stringify({ accountId: cfInfo.accountId, accountName: cfInfo.accountName }));
+
+        await tg(env.BOT_TOKEN, "sendMessage", {
+          chat_id: chatId,
+          text: `☁️ <b>حساب Cloudflare متصل شد!</b> ✅\n• نام حساب: <code>${escapeHtml(cfInfo.accountName)}</code>\n🧠 <b>موتور هوش مصنوعی ایجنت فعال شد!</b>`,
+          parse_mode: "HTML",
+        });
+
+        // Transition immediately to the intelligent categories screen!
+        state.step = "categories";
+        await showScreen(env, userId, chatId, screenIntro(userName, cfInfo.accountName), state, true);
+        return;
+      } else {
+        await tg(env.BOT_TOKEN, "sendMessage", {
+          chat_id: chatId,
+          text: "⚠️ توکن ارسال‌شده Cloudflare معتبر نبود یا دسترسی لازم را نداشت. لطفاً مطمئن شوید توکن دسترسی <b>Workers Scripts: Edit</b> و <b>Account: Read</b> دارد.",
+          parse_mode: "HTML",
+        });
+        return;
+      }
+    }
+
+    // ── Check if CF is connected before allowing conversational building ──
+    const cfStored = await env.KV.get(`cf:${userId}`);
+    if (!cfStored) {
+      await tg(env.BOT_TOKEN, "sendMessage", {
+        chat_id: chatId,
+        text: `⚠️ <b>اتصال به Cloudflare الزامی است:</b>\n\nبرای اینکه هوش مصنوعی بتواند با شما گفتگو کرده و ربات را برایتان تحلیل و بسازد، ابتدا باید حساب Cloudflare خود را متصل فرمایید.`,
+        parse_mode: "HTML",
+      });
+      await showScreen(env, userId, chatId, screenConnectCfFirst(userName, baseUrl), state, true);
+      return;
+    }
+
+    // ── 2. BotFather Token Detection (`123456:ABC...`) ──
+    if (/^\d{6,}:[A-Za-z0-9_-]{30,}$/.test(text)) {
+      await tg(env.BOT_TOKEN, "sendChatAction", { chat_id: chatId, action: "typing" });
+      const botInfoRes = await fetch(`https://api.telegram.org/bot${text}/getMe`);
+      const botInfo = await botInfoRes.json();
+
+      if (!botInfo.ok) {
+        await tg(env.BOT_TOKEN, "sendMessage", {
+          chat_id: chatId,
+          text: `❌ <b>توکن تلگرام نامعتبر است:</b> ${escapeHtml(botInfo.description || "پاسخی از سرور تلگرام دریافت نشد")}\n\nلطفاً توکن صحیح را از @BotFather کپی و ارسال کنید.`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+
+      state.botToken = text;
+      state.botUsername = botInfo.result.username;
+      state.botFirstName = botInfo.result.first_name;
+
+      const cfDataRaw = await env.KV.get(`cfdata:${userId}`);
+      const cfData = cfDataRaw ? JSON.parse(cfDataRaw) : {};
+
+      // Both keys ready! Go to Pre-Flight approval
+      state.step = "pre_flight";
+      await showScreen(
+        env,
+        userId,
+        chatId,
+        screenPreFlight(state.spec || { title: "ربات اختصاصی" }, state.botUsername, state.botFirstName, cfData.accountName),
+        state,
+        true // Fresh message at bottom!
+      );
+      return;
+    }
+
+    // ── 3. Conversational Chatbot / Consulting Mode ──
+    // Always trigger typing indicator so the user sees the bot is actively thinking!
+    await tg(env.BOT_TOKEN, "sendChatAction", { chat_id: chatId, action: "typing" });
+
+    state.chatHistory = state.chatHistory || [];
+    state.chatHistory.push({ role: "user", content: text });
+
+    // If user says "تأییده", "اوکیه", "همین خوبه", "بساز"
+    if (/^(تأییده|تاییده|اوکیه|اوکی|خوبه|بساز|تایید|ادامه|برو بعدی|تایید میکنم|تایید سناریو)$/i.test(text.replace(/[\s\.\!]/g, ""))) {
+      state.step = "ask_bot_token";
+      const cfDataRaw = await env.KV.get(`cfdata:${userId}`);
+      const cfData = cfDataRaw ? JSON.parse(cfDataRaw) : {};
+      await showScreen(env, userId, chatId, screenAskBotToken(state.spec || { title: "ربات اختصاصی", templateId: "ai_chat" }, cfData.accountName), state, true);
+      return;
+    }
+
+    // If user is describing a custom scenario or refining
+    if (!state.spec) {
+      state.spec = {
+        title: "💡 سناریوی اختصاصی شما",
+        templateId: "custom",
+        customDesc: text,
+        custom: { customPrompt: text },
+      };
+    } else {
+      state.spec.customDesc = (state.spec.customDesc ? state.spec.customDesc + " - " : "") + text;
+      if (state.spec.templateId === "ai_chat") {
+        state.spec.custom.systemPrompt = text;
+      }
+    }
+
+    state.step = "consulting";
+    const aiAnswer = await aiConsultant(text, state.chatHistory, env);
+    state.chatHistory.push({ role: "assistant", content: aiAnswer });
+
+    // ALWAYS SEND A FRESH MESSAGE TO CHAT! NEVER EDIT OLD MESSAGES WHEN USER CHATS!
+    await showScreen(env, userId, chatId, screenConsulting(state.spec, aiAnswer), state, true);
+  } catch (err) {
+    console.error("handleMessage exception:", err);
     await tg(env.BOT_TOKEN, "sendMessage", {
       chat_id: chatId,
-      text: `⚠️ <b>اتصال به Cloudflare الزامی است:</b>\n\nبرای اینکه هوش مصنوعی بتواند با شما گفتگو کرده و ربات را برایتان تحلیل و بسازد، ابتدا باید حساب Cloudflare خود را متصل فرمایید.`,
+      text: `⚠️ <b>خطا در پردازش پیام:</b>\n${escapeHtml(err.message)}\n\nبرای بازنشانی منو، لطفاً دستور /start را ارسال فرمایید.`,
       parse_mode: "HTML",
     });
-    await showScreen(env, userId, chatId, screenConnectCfFirst(userName, baseUrl), state);
-    return;
   }
-
-  // ── 2. BotFather Token Detection (`123456:ABC...`) ──
-  if (/^\d{6,}:[A-Za-z0-9_-]{30,}$/.test(text)) {
-    await tg(env.BOT_TOKEN, "sendChatAction", { chat_id: chatId, action: "typing" });
-    const botInfoRes = await fetch(`https://api.telegram.org/bot${text}/getMe`);
-    const botInfo = await botInfoRes.json();
-
-    if (!botInfo.ok) {
-      await tg(env.BOT_TOKEN, "sendMessage", {
-        chat_id: chatId,
-        text: `❌ <b>توکن تلگرام نامعتبر است:</b> ${botInfo.description || "پاسخی از سرور تلگرام دریافت نشد"}\n\nلطفاً توکن صحیح را از @BotFather کپی و ارسال کنید.`,
-        parse_mode: "HTML",
-      });
-      return;
-    }
-
-    state.botToken = text;
-    state.botUsername = botInfo.result.username;
-    state.botFirstName = botInfo.result.first_name;
-
-    const cfDataRaw = await env.KV.get(`cfdata:${userId}`);
-    const cfData = cfDataRaw ? JSON.parse(cfDataRaw) : {};
-
-    // Both keys ready! Go to Pre-Flight approval
-    state.step = "pre_flight";
-    await showScreen(
-      env,
-      userId,
-      chatId,
-      screenPreFlight(state.spec || { title: "ربات اختصاصی" }, state.botUsername, state.botFirstName, cfData.accountName),
-      state
-    );
-    return;
-  }
-
-  // ── 3. Conversational Chatbot / Consulting Mode ──
-  await tg(env.BOT_TOKEN, "sendChatAction", { chat_id: chatId, action: "typing" });
-
-  state.chatHistory = state.chatHistory || [];
-  state.chatHistory.push({ role: "user", content: text });
-
-  // If user says "تأییده", "اوکیه", "همین خوبه", "بساز"
-  if (/^(تأییده|تاییده|اوکیه|خوبه|بساز|تایید|ادامه|برو بعدی)$/i.test(text.replace(/[\s\.\!]/g, ""))) {
-    state.step = "ask_bot_token";
-    const cfDataRaw = await env.KV.get(`cfdata:${userId}`);
-    const cfData = cfDataRaw ? JSON.parse(cfDataRaw) : {};
-    await showScreen(env, userId, chatId, screenAskBotToken(state.spec || { title: "ربات اختصاصی", templateId: "ai_chat" }, cfData.accountName), state);
-    return;
-  }
-
-  // If user is describing a custom scenario or refining
-  if (!state.spec) {
-    state.spec = {
-      title: "💡 سناریوی اختصاصی شما",
-      templateId: "custom",
-      customDesc: text,
-      custom: { customPrompt: text },
-    };
-  } else {
-    state.spec.customDesc = (state.spec.customDesc ? state.spec.customDesc + " - " : "") + text;
-    if (state.spec.templateId === "ai_chat") {
-      state.spec.custom.systemPrompt = text;
-    }
-  }
-
-  state.step = "consulting";
-  const aiAnswer = await aiConsultant(text, state.chatHistory, env);
-  state.chatHistory.push({ role: "assistant", content: aiAnswer });
-
-  await showScreen(env, userId, chatId, screenConsulting(state.spec, aiAnswer), state);
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -928,8 +953,8 @@ export default {
       try {
         const body = await request.json();
         const { initData, userId: bodyUserId, cfToken } = body;
-
         let userId = bodyUserId;
+
         if (initData) {
           try {
             const params = new URLSearchParams(initData);
@@ -961,7 +986,7 @@ export default {
         // Notify user in Telegram chat and transition screen immediately
         await tg(env.BOT_TOKEN, "sendMessage", {
           chat_id: userId,
-          text: `☁️ <b>اتصال به Cloudflare برقرار شد!</b> ✅\n• حساب: <code>${cfInfo.accountName}</code>\n🧠 <b>موتور هوش مصنوعی ایجنت فعال شد!</b>`,
+          text: `☁️ <b>اتصال به Cloudflare برقرار شد!</b> ✅\n• حساب: <code>${escapeHtml(cfInfo.accountName)}</code>\n🧠 <b>موتور هوش مصنوعی ایجنت فعال شد!</b>`,
           parse_mode: "HTML",
         });
 
@@ -973,7 +998,8 @@ export default {
           spec: null,
           chatHistory: [],
         };
-        await showScreen(env, userId, userId, screenIntro("کاربر گرامی", cfInfo.accountName), state);
+
+        await showScreen(env, userId, userId, screenIntro("کاربر گرامی", cfInfo.accountName), state, true);
 
         return new Response(JSON.stringify({ ok: true, accountName: cfInfo.accountName }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
