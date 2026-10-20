@@ -4,133 +4,370 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark">
-  <title>Botmother | استخر DeepSeek</title>
+  <title>Botmother | استودیو ربات‌ساز تلگرام</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    :root { color-scheme: dark; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: #0d121c; color: #e8edf5; padding: 22px 16px calc(24px + env(safe-area-inset-bottom)); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #0d121c;
+      color: #e8edf5;
+      padding: 16px 14px calc(24px + env(safe-area-inset-bottom));
+    }
     main { max-width: 480px; margin: 0 auto; }
-    .eyebrow { color: #76e0bb; font-size: 12px; letter-spacing: .08em; font-weight: 700; }
-    h1 { margin: 8px 0 10px; font-size: 27px; line-height: 1.25; }
-    p { color: #aab6c8; line-height: 1.75; font-size: 14px; }
-    .panel { background: #151e2b; border: 1px solid #263449; border-radius: 18px; padding: 18px; margin-top: 16px; }
-    label { display: block; font-size: 14px; font-weight: 650; margin: 14px 0 8px; }
-    input[type=password] { width: 100%; border: 1px solid #35445a; background: #0d141f; color: #fff; border-radius: 11px; padding: 14px; font-size: 15px; direction: ltr; text-align: left; }
-    input:focus { outline: 2px solid #76e0bb; border-color: transparent; }
-    .consent { display: flex; gap: 10px; align-items: flex-start; color: #bac5d4; font-size: 13px; line-height: 1.6; margin: 16px 0; }
-    .consent input { margin-top: 4px; accent-color: #76e0bb; }
-    button, .link { width: 100%; display: block; border: 0; border-radius: 11px; padding: 14px 16px; font-size: 15px; font-weight: 700; text-align: center; text-decoration: none; cursor: pointer; }
+    .eyebrow {
+      color: #76e0bb;
+      font-size: 11px;
+      letter-spacing: .1em;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 6px 0 10px;
+      font-size: 24px;
+      line-height: 1.25;
+      color: #fff;
+    }
+    p {
+      color: #aab6c8;
+      line-height: 1.6;
+      font-size: 13.5px;
+      margin: 0 0 12px;
+    }
+    .tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+      background: #141c28;
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid #253346;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 10px 8px;
+      background: transparent;
+      border: 0;
+      border-radius: 9px;
+      color: #8fa0b5;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+      text-align: center;
+    }
+    .tab-btn.active {
+      background: #25364e;
+      color: #76e0bb;
+      box-shadow: 0 2px 6px rgba(0,0,0,.25);
+    }
+    .panel {
+      background: #151e2b;
+      border: 1px solid #263449;
+      border-radius: 16px;
+      padding: 16px;
+      margin-top: 4px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 650;
+      margin: 12px 0 6px;
+      color: #c9d5e4;
+    }
+    input[type=text], input[type=password], select, textarea {
+      width: 100%;
+      border: 1px solid #35445a;
+      background: #0d141f;
+      color: #fff;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid #76e0bb;
+      border-color: transparent;
+    }
+    textarea { resize: vertical; min-height: 72px; }
+    .consent {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      color: #bac5d4;
+      font-size: 12.5px;
+      line-height: 1.5;
+      margin: 14px 0;
+    }
+    .consent input { margin-top: 3px; accent-color: #76e0bb; }
+    button, .link {
+      width: 100%;
+      display: block;
+      border: 0;
+      border-radius: 10px;
+      padding: 13px 16px;
+      font-size: 14.5px;
+      font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
     button { background: #76e0bb; color: #07140f; }
     button:disabled { opacity: .45; cursor: not-allowed; }
     .secondary { background: #253247; color: #e8edf5; margin-top: 10px; }
     .danger { background: #48252b; color: #ffc4c8; margin-top: 10px; }
-    .link { color: #91d6ff; background: #14283a; margin-top: 12px; }
-    #status { min-height: 22px; color: #76e0bb; font-size: 13px; margin-top: 12px; }
-    #status.error { color: #ff9ea6; }
-    #membership { white-space: pre-line; color: #d2dbea; font-size: 13px; }
-    .small { color: #7f8da1; font-size: 12px; }
+    .link { color: #91d6ff; background: #14283a; margin-top: 10px; }
+    #status, #buildStatus {
+      min-height: 20px;
+      color: #76e0bb;
+      font-size: 13px;
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+    .error { color: #ff9ea6 !important; }
+    #membership { white-space: pre-line; color: #d2dbea; font-size: 13px; line-height: 1.6; }
+    .small { color: #7f8da1; font-size: 11.5px; line-height: 1.5; margin-top: 12px; }
     [hidden] { display: none !important; }
+    .code-preview {
+      background: #090e15;
+      border: 1px solid #222d3d;
+      border-radius: 8px;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 11px;
+      direction: ltr;
+      text-align: left;
+      max-height: 150px;
+      overflow-y: auto;
+      color: #a8d5b5;
+      white-space: pre-wrap;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
   <main>
-    <div class="eyebrow">BOTMOTHER / DEEPSEEK</div>
-    <h1>ورود به استخر مشارکتی</h1>
-    <p>کلید API خودت را با رضایت به استخر اضافه کن. پس از تأیید، خدمات ربات برایت فعال می‌شود و درخواست‌ها به‌صورت چرخشی بین کلیدهای فعال پخش می‌شوند.</p>
+    <div class="eyebrow">BOTMOTHER STUDIO</div>
+    <h1>استودیو ساخت و استقرار ربات</h1>
+    <p>طراحی، ساخت و استقرار ربات‌های سرورلس تلگرام بر بستر Serverless و Cloudflare Workers</p>
 
-    <section class="panel">
-      <div id="membership">در حال بررسی وضعیت عضویت…</div>
-      <a class="link" href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">ساخت کلید در صفحهٔ رسمی DeepSeek</a>
+    <div class="tabs">
+      <button class="tab-btn active" id="tabBtnBuilder" type="button">🚀 ساخت ربات</button>
+      <button class="tab-btn" id="tabBtnPool" type="button">🔐 استخر کلید</button>
+      <button class="tab-btn" id="tabBtnCf" type="button">☁️ کلودفلر</button>
+    </div>
 
-      <form id="form">
-        <label for="key">کلید DeepSeek</label>
-        <input id="key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="کلید API را وارد کن">
-        <label class="consent"><input id="consent" type="checkbox"><span>تأیید می‌کنم مالک یا مجاز به استفاده از این کلید هستم و اجازه می‌دهم کلید برای درخواست اعضای استخر هم استفاده شود. می‌توانم هر زمان آن را از استخر حذف کنم.</span></label>
-        <button id="submit" type="submit">بررسی و افزودن کلید</button>
+    <!-- TAB 1: BOT BUILDER & GENERATION -->
+    <section class="panel" id="panelBuilder">
+      <form id="builderForm">
+        <label for="templateId">دسته‌بندی ربات</label>
+        <select id="templateId">
+          <option value="ai_chat">🤖 چت‌بات هوش مصنوعی (AI Assistant)</option>
+          <option value="channel_mgr">📢 مدیریت کانال و گروه (Channel Manager)</option>
+          <option value="store">🛍️ فروشگاه و ثبت سفارش (E-Commerce)</option>
+          <option value="utility">🛠️ ابزار کاربردی و سیستمی (Utility)</option>
+          <option value="custom" selected>💡 ایدهٔ اختصاصی و آزاد (Custom)</option>
+        </select>
+
+        <label for="botName">نام یا عنوان ربات</label>
+        <input id="botName" type="text" placeholder="مثلاً: ربات فروشگاه طلایی" autocomplete="off">
+
+        <label for="brief">هدف و شرح کارکرد ربات</label>
+        <textarea id="brief" placeholder="توضیح دهید ربات چه کاری انجام می‌دهد و چه پیام‌هایی دارد..."></textarea>
+
+        <label for="features">قابلیت‌های کلیدی مدنظر</label>
+        <textarea id="features" placeholder="مثلاً: ثبت نام مشتری، نمایش کاتالوگ، بررسی عضویت کانال..."></textarea>
+
+        <button id="submitBuild" type="submit" style="margin-top: 14px;">🚀 ساخت و ارسال سورس به چت تلگرام</button>
       </form>
-      <button id="refresh" class="secondary" type="button">به‌روزرسانی وضعیت</button>
-      <button id="remove" class="danger" type="button" hidden>حذف کلید من از استخر</button>
+
+      <div id="buildStatus" role="status" aria-live="polite"></div>
+      <pre id="codePreview" class="code-preview" hidden></pre>
+      <p class="small">سورس تولید شده با استاندارد رسمی پلتفرم Telegram Serverless ساخته و در چت ارسال می‌شود.</p>
+    </section>
+
+    <!-- TAB 2: DEEPSEEK POOL MEMBERSHIP -->
+    <section class="panel" id="panelPool" hidden>
+      <div id="membership">در حال بررسی وضعیت استخر…</div>
+      <a class="link" href="https://platform.deepseek.com/api_keys" target="_blank" rel="noreferrer">🔗 ساخت کلید در صفحهٔ رسمی DeepSeek</a>
+
+      <form id="formPool" style="margin-top: 12px;">
+        <label for="key">کلید DeepSeek</label>
+        <input id="key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-...">
+        <label class="consent">
+          <input id="consent" type="checkbox">
+          <span>تأیید می‌کنم مالک این کلید هستم و اجازه می‌دهم کلید به صورت چرخشی در استخر امن اعضا استفاده شود. هر زمان می‌توانم آن را حذف کنم.</span>
+        </label>
+        <button id="submitPool" type="submit">بررسی و افزودن کلید به استخر</button>
+      </form>
+
+      <button id="refreshPool" class="secondary" type="button">به‌روزرسانی وضعیت</button>
+      <button id="removePool" class="danger" type="button" hidden>حذف کلید من از استخر</button>
       <div id="status" role="status" aria-live="polite"></div>
-      <p class="small">کلید در پیام چت ذخیره نمی‌شود. Botmother آن را برای درخواست DeepSeek به‌کار می‌برد؛ هرگز کلید را در Git یا پیام عمومی قرار نده.</p>
+      <p class="small">کلید با رمزنگاری AES-GCM در استخر ذخیره می‌شود و هیچ‌گاه در چت عمومی یا گیت قرار نمی‌گیرد.</p>
+    </section>
+
+    <!-- TAB 3: CLOUDFLARE TOKENS -->
+    <section class="panel" id="panelCf" hidden>
+      <label>مجوزهای مورد نیاز Cloudflare Workers</label>
+      <p class="small">برای استقرار مستقیم روی Cloudflare، توکن باید دارای دسترسی‌های <b>Workers Scripts: Edit</b> و <b>Account Settings: Read</b> باشد.</p>
+
+      <a class="link" href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%2C%7B%22key%22%3A%22account_settings%22%2C%22type%22%3A%22read%22%7D%5D&accountId=%2A&zoneId=all&name=BotMother%20Worker%20Builder" target="_blank" rel="noreferrer" style="background:#f38020; color:#fff; font-weight:700;">
+        ☁️ ساخت توکن با مجوزهای آماده در Cloudflare
+      </a>
+      <p class="small" style="margin-top:14px;">لینک بالا مستقیماً صفحه ساخت توکن کلودفلر را با نام BotMother و دسترسی‌های دقیق باز می‌کند.</p>
     </section>
   </main>
+
   <script>
     const tg = window.Telegram?.WebApp;
-    const form = document.getElementById('form');
-    const keyInput = document.getElementById('key');
-    const consent = document.getElementById('consent');
-    const statusEl = document.getElementById('status');
-    const membership = document.getElementById('membership');
-    const removeButton = document.getElementById('remove');
     tg?.ready();
     tg?.expand();
 
+    // Tabs
+    const tabBtnBuilder = document.getElementById('tabBtnBuilder');
+    const tabBtnPool = document.getElementById('tabBtnPool');
+    const tabBtnCf = document.getElementById('tabBtnCf');
+    const panelBuilder = document.getElementById('panelBuilder');
+    const panelPool = document.getElementById('panelPool');
+    const panelCf = document.getElementById('panelCf');
+
+    function switchTab(activeBtn, activePanel) {
+      [tabBtnBuilder, tabBtnPool, tabBtnCf].forEach(b => b.classList.remove('active'));
+      [panelBuilder, panelPool, panelCf].forEach(p => p.hidden = true);
+      activeBtn.classList.add('active');
+      activePanel.hidden = false;
+    }
+
+    tabBtnBuilder.addEventListener('click', () => switchTab(tabBtnBuilder, panelBuilder));
+    tabBtnPool.addEventListener('click', () => {
+      switchTab(tabBtnPool, panelPool);
+      refreshPoolStatus();
+    });
+    tabBtnCf.addEventListener('click', () => switchTab(tabBtnCf, panelCf));
+
+    // Serverless endpoint caller
     function callEndpoint(name, input = {}) {
       return new Promise((resolve, reject) => {
-        if (!tg?.initData || !tg?.Serverless?.call) return reject(new Error('این Mini App را از داخل ربات تلگرام باز کن.'));
+        if (!tg?.initData || !tg?.Serverless?.call) {
+          return reject(new Error('لطفاً این برنامه را از درون تلگرام باز کنید.'));
+        }
         tg.Serverless.call(name, input, (error, result) => {
-          if (error) reject(new Error(error.message || 'درخواست انجام نشد.'));
+          if (error) reject(new Error(error.message || 'خطا در ارتباط با سرور.'));
           else resolve(result);
         });
       });
     }
 
-    function setStatus(message, isError = false) {
-      statusEl.textContent = message;
-      statusEl.classList.toggle('error', isError);
-    }
+    // Builder Form
+    const builderForm = document.getElementById('builderForm');
+    const submitBuild = document.getElementById('submitBuild');
+    const buildStatus = document.getElementById('buildStatus');
+    const codePreview = document.getElementById('codePreview');
 
-    async function refreshStatus() {
+    builderForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const templateId = document.getElementById('templateId').value;
+      const botName = document.getElementById('botName').value.trim();
+      const brief = document.getElementById('brief').value.trim();
+      const features = document.getElementById('features').value.trim();
+
+      submitBuild.disabled = true;
+      buildStatus.className = '';
+      buildStatus.textContent = '⏳ در حال تولید سورس ربات و ارسال به چت شما...';
+      codePreview.hidden = true;
+
+      try {
+        const res = await callEndpoint('generateBot', { templateId, botName, brief, features });
+        buildStatus.textContent = `✅ ${res.message || 'سورس ساخته شد!'}`;
+        if (res.code) {
+          codePreview.textContent = res.code;
+          codePreview.hidden = false;
+        }
+      } catch (err) {
+        buildStatus.className = 'error';
+        buildStatus.textContent = `❌ ${err.message}`;
+      } finally {
+        submitBuild.disabled = false;
+      }
+    });
+
+    // Pool Form
+    const formPool = document.getElementById('formPool');
+    const keyInput = document.getElementById('key');
+    const consent = document.getElementById('consent');
+    const statusEl = document.getElementById('status');
+    const membership = document.getElementById('membership');
+    const removePool = document.getElementById('removePool');
+    const submitPool = document.getElementById('submitPool');
+
+    async function refreshPoolStatus() {
       try {
         const result = await callEndpoint('getPoolStatus');
         if (!result.joined) {
-          membership.textContent = 'هنوز کلیدی به استخر اضافه نکرده‌ای.';
-          removeButton.hidden = true;
+          membership.textContent = 'شما هنوز کلیدی در استخر DeepSeek ثبت نکرده‌اید.';
+          removePool.hidden = true;
           return;
         }
-        const state = result.status === 'active' ? 'فعال' : 'موقتاً کنار گذاشته شده؛ کلید را دوباره ثبت کن';
-        membership.textContent = `وضعیت: ${state}\nدرخواست موفق: ${result.requestCount}\nتوکن‌های ورودی/خروجی: ${result.promptTokens}/${result.completionTokens}`;
-        removeButton.hidden = false;
+        const state = result.status === 'active' ? 'فعال ✅' : 'موقتاً غیرفعال؛ کلید را دوباره ثبت کنید';
+        membership.textContent = `وضعیت کلید شما: ${state}\nدرخواست‌های موفق: ${result.requestCount}\nتوکن‌های ورودی/خروجی: ${result.promptTokens}/${result.completionTokens}`;
+        removePool.hidden = false;
       } catch (error) {
-        membership.textContent = 'وضعیت عضویت در دسترس نیست.';
-        setStatus(error.message, true);
+        membership.textContent = 'وضعیت استخر در دسترس نیست.';
       }
     }
 
-    form.addEventListener('submit', async (event) => {
-      event.preventDefault();
+    formPool.addEventListener('submit', async (e) => {
+      e.preventDefault();
       const key = keyInput.value.trim();
-      if (!key) return setStatus('ابتدا کلید DeepSeek را وارد کن.', true);
-      if (!consent.checked) return setStatus('برای افزودن کلید به استخر، رضایت را تأیید کن.', true);
-      document.getElementById('submit').disabled = true;
-      setStatus('در حال بررسی کلید…');
+      if (!key) {
+        statusEl.className = 'error';
+        statusEl.textContent = 'ابتدا کلید DeepSeek را وارد فرمایید.';
+        return;
+      }
+      if (!consent.checked) {
+        statusEl.className = 'error';
+        statusEl.textContent = 'برای عضویت، تأیید رضایت الزامی است.';
+        return;
+      }
+
+      submitPool.disabled = true;
+      statusEl.className = '';
+      statusEl.textContent = 'در حال بررسی و اعتبارسنجی کلید با DeepSeek...';
+
       try {
-        const result = await callEndpoint('registerKey', { key, consent: true });
+        const res = await callEndpoint('registerKey', { key, consent: true });
         keyInput.value = '';
         consent.checked = false;
-        setStatus(`${result.message || 'کلید به استخر اضافه شد.'} به ربات برگرد و /start را بزن.`);
-        await refreshStatus();
-      } catch (error) {
-        setStatus(error.message, true);
+        statusEl.textContent = `✅ ${res.message || 'کلید با موفقیت ثبت شد.'}`;
+        await refreshPoolStatus();
+      } catch (err) {
+        statusEl.className = 'error';
+        statusEl.textContent = `❌ ${err.message}`;
       } finally {
-        document.getElementById('submit').disabled = false;
+        submitPool.disabled = false;
       }
     });
 
-    removeButton.addEventListener('click', async () => {
-      if (!window.confirm('کلیدت از استخر حذف شود؟')) return;
+    removePool.addEventListener('click', async () => {
+      if (!confirm('آیا از حذف کلید خود از استخر مشارکتی اطمینان دارید؟')) return;
       try {
-        const result = await callEndpoint('removeKey');
-        setStatus(result.message || 'کلید حذف شد.');
-        await refreshStatus();
-      } catch (error) {
-        setStatus(error.message, true);
+        const res = await callEndpoint('removeKey');
+        statusEl.textContent = `✅ ${res.message || 'کلید حذف شد.'}`;
+        await refreshPoolStatus();
+      } catch (err) {
+        statusEl.className = 'error';
+        statusEl.textContent = `❌ ${err.message}`;
       }
     });
 
-    document.getElementById('refresh').addEventListener('click', refreshStatus);
-    refreshStatus();
+    document.getElementById('refreshPool').addEventListener('click', refreshPoolStatus);
   </script>
 </body>
 </html>

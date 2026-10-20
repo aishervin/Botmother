@@ -1,6 +1,9 @@
 name: Deploy Botmother to Telegram Serverless
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -16,7 +19,7 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install CLI
+      - name: Install dependencies
         run: npm install
 
       - name: Configure pool encryption
@@ -25,8 +28,18 @@ jobs:
           POOL_ENCRYPTION_KEY: ${{ secrets.POOL_ENCRYPTION_KEY }}
         run: npm run configure:serverless
 
+      - name: Run database migrations
+        env:
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+        run: npx tgcloud migrate --yes
+
       - name: Deploy modules and Mini App
         env:
           TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
           POOL_ENCRYPTION_KEY: ${{ secrets.POOL_ENCRYPTION_KEY }}
         run: npx tgcloud push
+
+      - name: Sync Telegram webhook
+        env:
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+        run: npx tgcloud webhook sync
